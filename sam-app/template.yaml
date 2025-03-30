@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  sam-app
+
+  Sample SAM Template for sam-app
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+    MemorySize: 128
+
+Resources:
+  ApiGatewayRestApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Auth:
+        ResourcePolicy:
+          CustomStatements:
+            [
+              {
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "execute-api:Invoke",
+                "Resource": ["execute-api:/*/*/*"],
+              },
+              {
+                "Effect": "Deny",
+                "Principal": "*",
+                "Action": "execute-api:Invoke",
+                "Resource": ["execute-api:/*/*/*"],
+                "Condition": {
+                    "NotIpAddress":
+                      {
+                        "aws:SourceIp":
+                          [
+                            "118.9.105.194/32",
+                            "153.125.138.153/32",
+                            "133.32.132.96/32",
+                          ],
+                      },
+                  }, # Joolen IP と開発者自宅IP
+              },
+            ]
+      Tags: { Name: ProgrammingClubApp }
+  AtCoderCollectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: get_atcoder_submission_data/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Events:
+        WeeklySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 0 ? * SUN *) # 毎週日曜日の午前0時（UTC）
+            Description: "Weekly AtCoder submission data collection"
+            Enabled: true
+      Tags: { Name: ProgrammingClubApp }
+
+  HelloWorldFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: hello_world/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Events:
+        HelloWorld:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /hello
+            Method: get
+            RestApiId: !Ref ApiGatewayRestApi
+      Tags: { Name: ProgrammingClubApp }
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  HelloWorldApi:
+    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
+    Value: !Sub "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
+  HelloWorldFunction:
+    Description: "Hello World Lambda Function ARN"
+    Value: !GetAtt HelloWorldFunction.Arn
+  HelloWorldFunctionIamRole:
+    Description: "Implicit IAM Role created for Hello World function"
+    Value: !GetAtt HelloWorldFunctionRole.Arn
